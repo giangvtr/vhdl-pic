@@ -1,0 +1,20 @@
+v 4
+file "/home/giangvu/Documents/vhdl26/simulations/PIC/" "../../vhdl/PIC/tb_pic.vhd" "2ab040f1fa4d7c76d4f3fee8a2c0b38bc9e2434a" "20260521212711.893":
+  entity tb_pic at 1( 0) + 0 on 22;
+  architecture test of tb_pic at 10( 158) + 0 on 23;
+file "/home/giangvu/Documents/vhdl26/simulations/PIC/" "../../vhdl/PIC/state_machine.vhd" "21ad0d7db82ecc71dfcd08b070da1aab4a8622d8" "20260521212711.414":
+  entity state_machine at 1( 0) + 0 on 18;
+  architecture behavioral of state_machine at 26( 918) + 0 on 19;
+file "/home/giangvu/Documents/vhdl26/simulations/PIC/" "../../vhdl/PIC/dpram.vhd" "0434739538f177170bad9b0360334d40a90ea758" "20260521212711.179":
+  entity dpram at 1( 0) + 0 on 14;
+  architecture rtl of dpram at 22( 808) + 0 on 15;
+file "/home/giangvu/Documents/vhdl26/simulations/PIC/" "../../vhdl/PIC/alu.vhd" "6e51273dce76bb6035e24acbe41ca8405c181751" "20260521212710.960":
+  package alu_pkg at 1( 0) + 0 on 11;
+  entity alu at 22( 783) + 0 on 12;
+  architecture behavioral of alu at 39( 1556) + 0 on 13;
+file "/home/giangvu/Documents/vhdl26/simulations/PIC/" "../../vhdl/PIC/toplevel_alu_mem.vhd" "24d5aa87ddb59c2134bb418784428fd4851eabe5" "20260521212711.303":
+  entity toplevel_alu_mem at 1( 0) + 0 on 16;
+  architecture rtl of toplevel_alu_mem at 22( 634) + 0 on 17;
+file "/home/giangvu/Documents/vhdl26/simulations/PIC/" "../../vhdl/PIC/pic.vhd" "0fe332753189f5c7bca9bad8f51f162c5e0422e7" "20260521212711.613":
+  entity pic at 1( 0) + 0 on 20;
+  architecture rtl of pic at 17( 634) + 0 on 21;

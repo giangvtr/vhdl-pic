@@ -1,0 +1,17 @@
+# --- Basic PIC Instruction Test ---
+# MOVLW 0x10 (Load 16 into W-register)
+11000000010000
+# ADDLW 0x05 (Add 5 to W-register)
+11111000000101
+# MOVWF 0x0C (Move W to RAM address 0x0C)
+00000010001100
+# CLRF 0x0C  (Clear RAM address 0x0C)
+00000110001100
+# GOTO 0x005 (Jump to PC 5)
+10100000000101
+# MOVLW 0x55 (Load pattern 01010101 into W)
+11000001010101
+# MOVWF 0x10 (Move W to RAM address 0x10)
+00000010010000
+# ADDLW 0x05 (Add 5 to W, checking if W changes from 0x55 to 0x5A)
+11111000000101
