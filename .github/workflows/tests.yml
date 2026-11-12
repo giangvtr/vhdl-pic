@@ -1,0 +1,55 @@
+name: PIC16F84A testbenches
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  cocotb-tests:
+    name: cocotb self-checking testbench
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install GHDL
+        run: sudo apt-get update && sudo apt-get install -y ghdl
+
+      - name: Install cocotb
+        run: pip install -r cocotb/requirements.txt
+
+      - name: Run cocotb test suite
+        run: make
+        working-directory: cocotb
+
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cocotb-results
+          path: cocotb/results.xml
+
+  legacy-vhdl-testbench:
+    name: file-driven VHDL testbench (tb_pic)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GHDL
+        run: sudo apt-get update && sudo apt-get install -y ghdl
+
+      - name: Analyze and elaborate
+        run: make make TESTBENCH=tb_pic
+        working-directory: simulation/PIC
+
+      - name: Run simulation
+        run: make run TESTBENCH=tb_pic
+        working-directory: simulation/PIC
+
+      - name: Show PC trace
+        run: cat simulation/PIC/output.txt
