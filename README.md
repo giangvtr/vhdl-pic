@@ -1,26 +1,22 @@
 # PIC16F84A Soft Core (VHDL)
 
-> A synthesizable VHDL implementation of the Microchip PIC16F84A 8-bit microcontroller CPU core, complete with a file-driven GHDL testbench.
+[![PIC16F84A testbenches](https://github.com/giangvtr/vhdl-pic/actions/workflows/tests.yml/badge.svg)](https://github.com/giangvtr/vhdl-pic/actions/workflows/tests.yml)
 
-[PIC16F84A Datasheet (PDF)](pic16f84a_datasheet.pdf) — the ISA reference this core is built against.
+> A synthesizable VHDL implementation of the Microchip PIC16F84A 8-bit microcontroller CPU core, with both a file-driven GHDL testbench and a automated cocotb verification environment.
+
+[PIC16F84A Datasheet (PDF)](pic16f84a_datasheet.pdf): the ISA reference this core is built against.
 
 ## Overview
+- 32/35 instructions implemented (SLEEP, CLRWDT, RETFIE excluded)
+- Fixed size 14-bit instruction, Harvard-style memory split (separate program and data memory)
+- Sequential: each instruction through a classic multi-cycle fetch/read/execute/write state machine, 
+- 8-bit W register, {Z, DC, C} STATUS flags, 13-bit program counter, and an 8-level hardware stack for CALL/RETURN.
+* File-driven testbench: reads binary opcodes from `input.txt`, runs them through the core, and writes the resulting program-counter trace to `output.txt`.
+* cocotb: a Python reference model (built from the datasheet's instruction set, not the RTL) drives the same GHDL simulation, comparing W/STATUS/PC/RAM after every instruction, with randomized sequences and opcode/flag coverage. 38 individual tests — see [`cocotb/`](cocotb/).
 
-This project implements the datapath and control logic of the **PIC16F84A** RISC microcontroller in VHDL. It decodes the full 35-instruction PIC opcode set, executes each instruction through a classic multi-cycle fetch/read/execute/write state machine, and maintains the architectural state (Working register, STATUS flags, program counter, hardware stack, and file-register RAM) exactly as the real silicon does.
+A learning project for hobbyists
 
-It was built as a learning/reference project for computer architecture and digital design: the goal was to take a well-documented commercial ISA (the [PIC16F84A datasheet](pic16f84a_datasheet.pdf) is included in this repo) and reproduce its behavior cycle-accurately at the RTL level. It's aimed at students and hobbyists interested in CPU design, VHDL, and how a real microcontroller decodes and executes instructions.
 
-The design mirrors the actual PIC microarchitecture — a 14-bit instruction word, an 8-level deep hardware call stack, a Harvard-style memory split, and a synchronous file-register RAM whose STATUS location is partially driven by the ALU rather than by writes.
-
----
-
-## Key Features
-
-* **Full PIC16F84A instruction set** — all 35 instructions across byte-oriented, bit-oriented, and literal/control groups are decoded and executed.
-* **Multi-cycle control** — a four-state machine (iFetch → Mread → Execute → Mwrite) sequences each instruction and signals completion via `instruction_return`.
-* **Complete architectural state** — 8-bit W register, {Z, DC, C} STATUS flags, 13-bit program counter, and an 8-level hardware stack for `CALL`/`RETURN`.
-* **Synchronous file-register RAM** — a 128 × 8 dual-port RAM with special handling for the STATUS register so ALU-generated flags are preserved.
-* **File-driven testbench** — reads binary opcodes from `input.txt`, runs them through the core, and writes the resulting program-counter trace to `output.txt`.
 
 ---
 
@@ -42,7 +38,7 @@ The core is composed of a decoder/control state machine, an ALU, and a file-regi
                          ▼          ▼
                    ┌─────────┐  ┌─────────┐
                    │   alu   │  │  dpram  │
-                   │ (35 ops)│  │ 128x8   │
+                   │ (32 ops)│  │ 128x8   │
                    └─────────┘  └─────────┘
 ```
 
@@ -60,22 +56,6 @@ The core is composed of a decoder/control state machine, an ALU, and a file-regi
 
 ---
 
-## Technical Highlights
-
-### Handling the STATUS register in RAM
-
-**Problem:** On the PIC, the STATUS register lives at file address `0x03` and is memory-mapped, but its Z/DC/C bits are updated by the ALU as a side effect of most instructions — not just by explicit writes. A naive RAM would clobber those flags on every unrelated write.
-
-**Approach considered:** Keeping STATUS entirely outside the RAM, versus keeping it in RAM but special-casing address `0x03`.
-
-**Chosen:** `dpram.vhd` treats `STATUS_ADDR = 3` specially: normal writes update the addressed byte, but the ALU-provided `d_status` bits are folded in so that Z/DC/C survive writes to other locations. The top-level `PIC` process also maintains its own `status_reg` copy for control decisions like conditional skips.
-
-**Result:** Instructions that both write a file register and affect flags (e.g. `ADDWF`, `SUBWF`) behave correctly, and the flag state stays consistent between the ALU, RAM, and control logic.
-
-### Multi-cycle state machine with registered decode
-
-Rather than a single-cycle design, the control uses a four-phase machine so memory reads and writes get their own clock edges. Instruction fields (`op`, `addr`, `jump_addr`, `lit`, `bit_sel`) are decoded once and **registered**, and a `force_nop` input lets the core inject a NOP to flush the pipeline after branches (`GOTO`/`CALL`/`RETURN`) so a stale instruction isn't executed at the branch target.
-
 ---
 
 ## Results / Performance
@@ -84,7 +64,7 @@ Running the included test program produces a clean program-counter trace, includ
 
 | Metric                 | Result                          |
 | ---------------------- | ------------------------------- |
-| Instructions supported | 35 (full PIC16F84A set)         |
+| Instructions supported | 32 of 35 (`SLEEP`, `CLRWDT`, `RETFIE` not implemented) |
 | Cycles per instruction | 4 (fetch/read/execute/write)    |
 | File-register RAM      | 128 × 8-bit                     |
 | Hardware stack depth   | 8 levels × 13-bit               |
@@ -118,6 +98,24 @@ Edit `simulation/PIC/input.txt` to run a different program — each line is a 14
 
 ---
 
+## Verification (cocotb)
+
+`cocotb/` adds a testbench that drives the same GHDL simulation through cocotb instead of a VHDL stimulus file:
+
+* `cocotb/model/pic_model.py`: a Python model of the **datasheet's** instruction set (Table 7-2, Instruction Set Summary)
+* `cocotb/tests/test_pic.py`: 33 directed tests (one per opcode, plus the `STATUS`@`0x03` RAM special case) and 4 chunks of randomized instruction sequences (2000 total by default), each compared against the model instruction-by-instruction. RAM content is verified by inserting a `MOVF` after any instruction the model predicts writes memory. A final test asserts that every opcode and every flag state (Z/DC/C, both 0 and 1) was actually exercised.
+
+
+```bash
+cd cocotb
+pip install -r requirements.txt
+make
+```
+
+`PIC_RANDOM_INSTRUCTIONS`, `PIC_RANDOM_CHUNKS` and `PIC_RANDOM_SEED` (env vars) tune the randomized run. Results are also written to `cocotb/results.xml` (JUnit format) and checked on every push/PR via GitHub Actions (badge above), or manually from the Actions tab (`workflow_dispatch`).
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -148,7 +146,7 @@ This compiles all VHDL sources, elaborates the `tb_pic` testbench, runs it for 1
 ```text
 pic_project/
 ├── vhdl/PIC/
-│   ├── alu.vhd                 # alu_pkg (35-op enum) + combinatorial ALU
+│   ├── alu.vhd                 # alu_pkg (32-op enum) + combinatorial ALU
 │   ├── dpram.vhd               # 128x8 file-register RAM (STATUS special-cased)
 │   ├── state_machine.vhd       # opcode decode + 4-state control
 │   ├── pic.vhd                 # top-level core: W, STATUS, PC, stack
@@ -158,16 +156,17 @@ pic_project/
 │   ├── Makefile                # GHDL analyze/elaborate/run/view flow
 │   ├── input.txt               # program opcodes (one 14-bit word per line)
 │   └── output.txt              # generated PC trace
-└── pic16f84a_datasheet.pdf     # ISA reference used for the implementation
+├── cocotb/
+│   ├── Makefile                 # cocotb/GHDL flow (`make` from this dir)
+│   ├── requirements.txt
+│   ├── model/pic_model.py       # datasheet-accurate Python reference model
+│   └── tests/test_pic.py        # directed + randomized self-checking tests
+├── .github/workflows/tests.yml  # CI: both testbenches, on push/PR/manual
+└── pic16f84a_datasheet.pdf      # ISA reference used for the implementation
 ```
 
 Note that `alu.vhd` also defines `alu_pkg`, the package holding the `alu_op` enumeration shared across the decoder, ALU, and datapath.
 
----
-
-## Security
-
-Not applicable — this is a hardware description / simulation project with no network, filesystem, or user-input attack surface beyond the local testbench, which reads a plain-text opcode file. If synthesized to real hardware, standard FPGA/ASIC toolchain and bitstream integrity considerations would apply.
 
 ## Contributing
 
@@ -180,9 +179,3 @@ git push origin feature/my-feature
 ```
 
 Then open a pull request. Please keep new VHDL consistent with the existing style and add matching opcodes to `input.txt` (or a new testbench) to demonstrate the change.
-
----
-
-## License
-
-No license file is currently included. Add one (e.g. the [MIT License](LICENSE)) before distributing.
