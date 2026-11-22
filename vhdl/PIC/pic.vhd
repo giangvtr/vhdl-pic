@@ -9,8 +9,9 @@ ENTITY PIC IS
         reset              : IN  std_logic;                                     -- MCLR (Active High)
         opcode             : IN  std_logic_vector(13 DOWNTO 0);
         status             : OUT std_logic_vector(2 DOWNTO 0);
-        program_counter    : OUT std_logic_vector(12 DOWNTO 0);                  -- MUST BE std_logic_vector
-        instruction_return : OUT std_logic                                       -- MUST BE instruction_return
+        program_counter    : OUT std_logic_vector(12 DOWNTO 0);                
+        instruction_return : OUT std_logic;                                    
+        work_reg_dbg       : OUT std_logic_vector(7 DOWNTO 0)                    -- verification-only: exposes W
     );
 END ENTITY PIC;
 
@@ -19,7 +20,6 @@ ARCHITECTURE rtl OF PIC IS
     -- Internal Architectural Registers
     SIGNAL pc_reg         : unsigned(12 DOWNTO 0) := (OTHERS => '0');
     SIGNAL work_reg       : std_logic_vector(7 DOWNTO 0) := (OTHERS => '0');
-    -- status_reg is fully maintained in this process (not driven by RAM)
     SIGNAL status_reg     : std_logic_vector(2 DOWNTO 0) := (OTHERS => '0'); -- {Z, DC, C}
 
     -- Stack Signals (8-level deep, 13-bit wide)
@@ -27,7 +27,7 @@ ARCHITECTURE rtl OF PIC IS
     SIGNAL stack      : stack_type := (OTHERS => (OTHERS => '0'));
     SIGNAL stack_ptr  : integer RANGE 0 TO 7 := 0;
 
-    -- Interconnects from state machine (now registered flip-flop outputs)
+    -- Interconnects from state machine
     SIGNAL sm_op        : alu_op;
     SIGNAL sm_addr      : std_logic_vector(6 DOWNTO 0);
     SIGNAL sm_jump_addr : std_logic_vector(10 DOWNTO 0);
@@ -48,11 +48,6 @@ ARCHITECTURE rtl OF PIC IS
     SIGNAL alu_f_in     : std_logic_vector(7 DOWNTO 0);
 
 BEGIN
-
-    -- ---------------------------------------------------------
-    -- 1. Component Instantiations
-    -- ---------------------------------------------------------
-
     U_FSM: ENTITY work.state_machine
     PORT MAP (
         clk        => clk,
@@ -70,7 +65,7 @@ BEGIN
         instr_ret  => sm_instr_ret
     );
 
-    -- Mux for ALU input B: Literal from the registered instruction or RAM data
+    -- Mux for ALU input B
     alu_f_in <= sm_lit WHEN (sm_op = OP_MOVLW OR sm_op = OP_ADDLW OR
                                  sm_op = OP_SUBLW OR sm_op = OP_ANDLW OR
                                  sm_op = OP_IORLW OR sm_op = OP_XORLW OR
@@ -100,13 +95,8 @@ BEGIN
         status   => ram_status
     );
 
-    -- ---------------------------------------------------------
+
     -- 2. Sequential Logic (PC, W-Reg, Status, Stack, Force-NOP)
-    --
-    -- Because all state-machine control outputs (sm_we_w, sm_we_mem,
-    -- sm_instr_ret) are now registered flip-flops they are glitch-free
-    -- and safe to sample directly here at any rising clock edge.
-    -- ---------------------------------------------------------
     PROCESS(clk, reset)
         VARIABLE bit_test_result : std_logic;
         VARIABLE next_stack_ptr  : integer;
@@ -119,28 +109,21 @@ BEGIN
 
         ELSIF rising_edge(clk) THEN
 
-            -- ----------------------------------------------------------
+    
             -- Write-back: update W register and/or status flags.
             -- sm_we_w / sm_we_mem are registered, guaranteed stable here.
-            -- ----------------------------------------------------------
+
             IF sm_we_w = '1' THEN
                 work_reg   <= alu_result;
-                -- Literal and W-destination instructions never write to RAM,
-                -- so dpram never updates STATUS_ADDR.  We maintain status_reg
-                -- here directly from the ALU output.
                 status_reg <= alu_status;
             END IF;
 
             IF sm_we_mem = '1' THEN
-                -- Mirror the ALU flags into status_reg whenever a file-
-                -- register result is written back to RAM.
                 status_reg <= alu_status;
             END IF;
 
-            -- ----------------------------------------------------------
             -- Program Counter and control-flow logic.
-            -- Triggered by sm_instr_ret (registered, safe to use here).
-            -- ----------------------------------------------------------
+            -- Triggered by sm_instr_ret
             IF sm_instr_ret = '1' THEN
 
                 IF sm_op = OP_GOTO THEN
@@ -218,5 +201,6 @@ BEGIN
     program_counter    <= std_logic_vector(pc_reg);
     status             <= status_reg;
     instruction_return <= sm_instr_ret;
+    work_reg_dbg       <= work_reg;
 
 END ARCHITECTURE rtl;

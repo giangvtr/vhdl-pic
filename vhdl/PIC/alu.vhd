@@ -3,7 +3,6 @@ USE ieee.std_logic_1164.ALL;
 USE ieee.numeric_std.ALL;
 
 PACKAGE alu_pkg IS
-    -- Complete PIC instruction set operation types (35 instructions)
     TYPE alu_op IS (
         -- Byte-Oriented File Register Operations (14 instructions)
         OP_ADDWF, OP_ANDWF, OP_CLRF,   OP_CLRW,  OP_COMF,  OP_DECF,
@@ -116,15 +115,14 @@ BEGIN
 
             WHEN OP_INCFSZ =>
                 v_res := unsigned(f_in) + 1;
-                IF v_res = 0 THEN v_status(2) := '1'; ELSE v_status(2) := '0'; END IF;
 
             WHEN OP_DECF =>
                 v_res := unsigned(f_in) - 1;
                 IF v_res = 0 THEN v_status(2) := '1'; ELSE v_status(2) := '0'; END IF;
 
             WHEN OP_DECFSZ =>
+                -- Status Affected: None (datasheet Table 7-2).
                 v_res := unsigned(f_in) - 1;
-                IF v_res = 0 THEN v_status(2) := '1'; ELSE v_status(2) := '0'; END IF;
 
             -- Bit-Oriented Operations
             WHEN OP_BCF =>
@@ -137,11 +135,10 @@ BEGIN
 
             WHEN OP_BTFSC =>
                 v_res := unsigned(f_in);
-                -- Test decision made elsewhere, no result change
+
 
             WHEN OP_BTFSS =>
                 v_res := unsigned(f_in);
-                -- Test decision made elsewhere, no result change
 
             -- Rotate Operations
             WHEN OP_RLF =>
@@ -156,15 +153,14 @@ BEGIN
             WHEN OP_SWAPF =>
                 v_res := unsigned(f_in(3 downto 0) & f_in(7 downto 4));
 
-            -- Return with Literal: load literal into W (like MOVLW) and pop PC
+            -- Return with Literal: load literal into W and pop PC
             WHEN OP_RETLW =>
                 v_res := unsigned(f_in);  -- f_in contains literal
 
-            -- Control Flow (these don't generate ALU results, handled at PC level)
+            -- Control Flow 
             WHEN OP_GOTO | OP_CALL | OP_RETURN =>
                 v_res := (others => '0');
 
-            -- No Operation
             WHEN OP_NOP =>
                 v_res := (others => '0');
 
